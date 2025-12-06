@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Canvas 日历待办事项 (AI 增强版)</title>
+    <style>
+        :root {
+            --bg-color: #f8f9fa;
+            --primary-color: #3b82f6; /* 蓝色主调 */
+            --text-color: #1f2937;
+            --border-color: #e5e7eb;
+            --highlight-bg: #eff6ff;
+            --danger-color: #ef4444;
+            --ai-color: #8b5cf6; /* 紫色用于 AI 功能 */
+            --ai-hover: #7c3aed;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            height: 100vh;
+            display: flex;
+            overflow: hidden;
+        }
+
+        /* --- 左侧：Canvas 日历区域 --- */
+        .calendar-container {
+            flex: 1;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+        }
+
+        .calendar-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding: 0 20px;
+        }
+
+        .month-title {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: var(--text-color);
+        }
+
+        .nav-btn {
+            background: white;
+            border: 1px solid var(--border-color);
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: all 0.2s;
+            color: var(--text-color);
+        }
+
+        .nav-btn:hover {
+            background-color: var(--highlight-bg);
+            border-color: var(--primary-color);
+            color: var(--primary-color);
+        }
+
+        /* Canvas 容器，用于自适应大小 */
+        .canvas-wrapper {
+            flex: 1;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            position: relative;
+            overflow: hidden;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            cursor: pointer;
+        }
+
+        /* --- 右侧：Todo 侧边栏 --- */
+        .todo-sidebar {
+            width: 380px;
+            background: white;
+            border-left: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            box-shadow: -2px 0 10px rgba(0,0,0,0.02);
+            z-index: 10;
+        }
+
+        .todo-header {
+            padding: 25px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .selected-date-display {
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin-bottom: 5px;
+            color: var(--primary-color);
+        }
+
+        .todo-subtitle {
+            font-size: 0.9rem;
+            color: #6b7280;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        /* 任务列表区域 */
+        .todo-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+        }
+
+        .todo-item {
+            display: flex;
+            align-items: center;
+            padding: 12px;
+            background: #f9fafb;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            transition: transform 0.2s;
+            border: 1px solid transparent;
+        }
+
+        .todo-item:hover {
+            border-color: var(--primary-color);
+            background: #fff;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        .todo-text {
+            flex: 1;
+            font-size: 0.95rem;
+            margin-left: 10px;
+            word-break: break-all;
+        }
+
+        /* 复选框样式 */
+        .todo-checkbox {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+            accent-color: var(--primary-color);
+        }
+
+        .todo-item.completed .todo-text {
+            text-decoration: line-through;
+            color: #9ca3af;
+        }
+
+        .delete-btn {
+            background: none;
+            border: none;
+            color: #9ca3af;
+            cursor: pointer;
+            padding: 4px;
+            font-size: 1.1rem;
+            transition: color 0.2s;
+        }
+
+        .delete-btn:hover { color: var(--danger-color); }
+
+        /* 输入区域 */
+        .todo-input-area {
+            padding: 20px;
+            border-top: 1px solid var(--border-color);
+            background: #fff;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 8px;
+        }
+
+        #newTodoInput {
+            flex: 1;
+            padding: 10px 14px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        #newTodoInput:focus { border-color: var(--primary-color); }
+
+        #addTodoBtn {
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 500;
+            white-space: nowrap;
+        }
+
+        #addTodoBtn:hover { opacity: 0.9; }
+
+        /* AI 按钮样式 */
+        .ai-btn {
+            background: var(--ai-color);
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            transition: background 0.2s;
+            white-space: nowrap;
+        }
+
+        .ai-btn:hover { background: var(--ai-hover); }
+
+        .ai-btn:disabled {
+            background: #d8b4fe;
+            cursor: not-allowed;
+        }
+
+        .ai-coach-btn {
+            margin-top: 0;
+            width: 100%;
+            justify-content: center;
+            background: white;
+            color: var(--ai-color);
+            border: 1px solid var(--ai-color);
+        }
+        .ai-coach-btn:hover {
+            background: #f3e8ff;
+        }
+
+        /* 空状态提示 */
+        .empty-state {
+            text-align: center;
+            color: #9ca3af;
+            margin-top: 50px;
+            font-style: italic;
+        }
+
+        /* Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s;
+        }
+
+        .modal-overlay.open {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 25px;
+            border-radius: 12px;
+            width: 90%;
+            max-width: 400px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        }
+
+        .modal-title {
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: var(--ai-color);
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .modal-body {
+            font-size: 1rem;
+            color: var(--text-color);
+            line-height: 1.6;
+            margin-bottom: 20px;
+            white-space: pre-line;
+        }
+
+        .modal-close-btn {
+            width: 100%;
+            padding: 10px;
+            background: var(--text-color);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+
+        @media (max-width: 768px) {
+            body { flex-direction: column; }
+            .todo-sidebar { width: 100%; height: 50vh; border-left: none; border-top: 1px solid var(--border-color); }
+            .calendar-container { height: 50vh; padding: 10px; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 左侧日历区域 -->
+    <div class="calendar-container">
+        <div class="calendar-header">
+            <button class="nav-btn" id="prevMonth">&lt; 上个月</button>
+            <div class="month-title" id="monthTitle">2023年 10月</div>
+            <button class="nav-btn" id="nextMonth">下个月 &gt;</button>
+        </div>
+        <div class="canvas-wrapper" id="canvasWrapper">
+            <canvas id="calendarCanvas"></canvas>
+        </div>
+    </div>
+
+    <!-- 右侧任务列表区域 -->
+    <div class="todo-sidebar">
+        <div class="todo-header">
+            <div class="selected-date-display" id="selectedDateDisplay">请选择日期</div>
+            <div class="todo-subtitle">
+                <span>待办事项清单</span>
+                <!-- AI Coach Button -->
+            </div>
+        </div>
+
+        <div class="todo-list" id="todoList">
+            <!-- 任务项将通过 JS 插入 -->
+            <div class="empty-state">点击左侧日历查看或添加任务</div>
+        </div>
+
+        <!-- AI Coach Area -->
+         <div style="padding: 0 20px;">
+            <button class="ai-btn ai-coach-btn" id="aiCoachBtn">🧠 分析今日任务并给建议</button>
+         </div>
+
+        <div class="todo-input-area">
+            <div class="input-group">
+                <input type="text" id="newTodoInput" placeholder="输入任务，或输入目标让 AI 拆解..." maxlength="50">
+                <button class="ai-btn" id="aiGenBtn" title="AI 智能生成任务">✨ 生成</button>
+                <button id="addTodoBtn">添加</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for AI Responses -->
+    <div class="modal-overlay" id="aiModal">
+        <div class="modal-content">
+            <div class="modal-title">✨ Gemini AI 助手</div>
+            <div class="modal-body" id="modalBody">正在思考中...</div>
+            <button class="modal-close-btn" onclick="closeModal()">关闭</button>
+        </div>
+    </div>
+
+    <script>
+        // --- 1. 状态管理 ---
+        const state = {
+            currentDate: new Date(),
+            selectedDate: new Date(),
+            todos: {}, // { "2023-10-27": [{text: "Buy milk", done: false}] }
+            cellWidth: 0,
+            cellHeight: 0,
+            headerHeight: 40,
+            mouseX: -1,
+            mouseY: -1
+        };
+
+        // --- 2. 初始化与配置 ---
+        const canvas = document.getElementById('calendarCanvas');
+        const ctx = canvas.getContext('2d');
+        const wrapper = document.getElementById('canvasWrapper');
+        
+        const COLORS = {
+            text: '#1f2937',
+            muted: '#9ca3af',
+            primary: '#3b82f6',
+            todayBg: '#eff6ff',
+            todayText: '#3b82f6',
+            selectedBg: '#3b82f6',
+            selectedText: '#ffffff',
+            dot: '#ef4444',
+            hover: 'rgba(59, 130, 246, 0.1)'
+        };
+
+        // --- Gemini API Configuration ---
+        const apiKey = ""; // Set by execution environment
+        
+        async function callGemini(prompt) {
+            if (!apiKey) {
+                console.warn("API Key is empty. Simulating response for demo.");
+                // For demo purposes if key is missing in local dev, throw error or mock
+                // throw new Error("API Key is missing.");
+            }
+
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+            const payload = {
+                contents: [{ parts: [{ text: prompt }] }]
+            };
+
+            // Retry logic
+            let retries = 3;
+            let delay = 1000;
+
+            for (let i = 0; i < retries; i++) {
+                try {
+                    const response = await fetch(url, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
+                    
+                    const data = await response.json();
+                    return data.candidates?.[0]?.content?.parts?.[0]?.text || "AI 暂时无法回答。";
+                } catch (e) {
+                    if (i === retries - 1) throw e;
+                    await new Promise(r => setTimeout(r, delay));
+                    delay *= 2;
+                }
+            }
+        }
+
+        // --- Data Persistence ---
+        function loadTodos() {
+            const saved = localStorage.getItem('canvas_calendar_todos');
+            if (saved) state.todos = JSON.parse(saved);
+        }
+        function saveTodos() {
+            localStorage.setItem('canvas_calendar_todos', JSON.stringify(state.todos));
+            drawCalendar();
+        }
+
+        // --- 3. Calendar Logic ---
+        function getDaysInMonth(year, month) { return new Date(year, month + 1, 0).getDate(); }
+        function getFirstDayOfMonth(year, month) { return new Date(year, month, 1).getDay(); }
+        function formatDateKey(date) {
+            const y = date.getFullYear();
+            const m = String(date.getMonth() + 1).padStart(2, '0');
+            const d = String(date.getDate()).padStart(2, '0');
+            return `${y}-${m}-${d}`;
+        }
+
+        // --- 4. Canvas Drawing ---
+        function resizeCanvas() {
+            const dpr = window.devicePixelRatio || 1;
+            const rect = wrapper.getBoundingClientRect();
+            canvas.width = rect.width * dpr;
+            canvas.height = rect.height * dpr;
+            canvas.style.width = rect.width + 'px';
+            canvas.style.height = rect.height + 'px';
+            ctx.scale(dpr, dpr);
+            drawCalendar();
+        }
+
+        function drawCalendar() {
+            const width = canvas.width / (window.devicePixelRatio || 1);
+            const height = canvas.height / (window.devicePixelRatio || 1);
+            
+            // 安全检查：如果宽度或高度无效，不绘制
+            if (width <= 0 || height <= 0) return;
+
+            ctx.clearRect(0, 0, width, height);
+
+            const year = state.currentDate.getFullYear();
+            const month = state.currentDate.getMonth();
+            const daysInMonth = getDaysInMonth(year, month);
+            const firstDay = getFirstDayOfMonth(year, month);
+            
+            document.getElementById('monthTitle').textContent = `${year}年 ${month + 1}月`;
+
+            const cols = 7;
+            const rows = 6;
+            state.cellWidth = width / cols;
+            
+            // 安全检查：确保单元格高度不为负
+            const availableHeight = height - state.headerHeight;
+            state.cellHeight = availableHeight > 0 ? availableHeight / rows : 10; // 默认给一个最小值避免除零
+
+            // Draw Header
+            const weekDays = ['日', '一', '二', '三', '四', '五', '六'];
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.font = 'bold 14px sans-serif';
+            ctx.fillStyle = COLORS.muted;
+
+            for (let i = 0; i < 7; i++) {
+                ctx.fillText(weekDays[i], i * state.cellWidth + state.cellWidth / 2, state.headerHeight / 2);
+            }
+            
+            ctx.beginPath();
+            ctx.moveTo(0, state.headerHeight);
+            ctx.lineTo(width, state.headerHeight);
+            ctx.strokeStyle = '#e5e7eb';
+            ctx.stroke();
+
+            // Draw Days
+            let dayCount = 1;
+            const today = new Date();
+            const isCurrentMonth = today.getFullYear() === year && today.getMonth() === month;
+            
+            // 安全计算半径，确保不为负
+            const baseRadius = Math.max(0, Math.min(state.cellWidth, state.cellHeight) * 0.35);
+
+            for (let row = 0; row < rows; row++) {
+                for (let col = 0; col < cols; col++) {
+                    if (row === 0 && col < firstDay) continue;
+                    if (dayCount > daysInMonth) break;
+
+                    const x = col * state.cellWidth;
+                    const y = row * state.cellHeight + state.headerHeight;
+                    const cx = x + state.cellWidth / 2;
+                    const cy = y + state.cellHeight / 2;
+
+                    const currentDrawDate = new Date(year, month, dayCount);
+                    const dateKey = formatDateKey(currentDrawDate);
+                    const isSelected = formatDateKey(state.selectedDate) === dateKey;
+                    const isToday = isCurrentMonth && dayCount === today.getDate();
+
+                    // Hover
+                    if (state.mouseX > x && state.mouseX < x + state.cellWidth &&
+                        state.mouseY > y && state.mouseY < y + state.cellHeight) {
+                        ctx.fillStyle = COLORS.hover;
+                        ctx.fillRect(x + 2, y + 2, state.cellWidth - 4, state.cellHeight - 4);
+                        document.body.style.cursor = 'pointer';
+                    }
+
+                    // Background
+                    if (isSelected) {
+                        ctx.fillStyle = COLORS.selectedBg;
+                        ctx.beginPath();
+                        ctx.arc(cx, cy, baseRadius, 0, Math.PI * 2);
+                        ctx.fill();
+                    } else if (isToday) {
+                        ctx.fillStyle = COLORS.todayBg;
+                        ctx.beginPath();
+                        ctx.arc(cx, cy, baseRadius, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+
+                    // Text
+                    ctx.font = isSelected || isToday ? 'bold 16px sans-serif' : '16px sans-serif';
+                    if (isSelected) ctx.fillStyle = COLORS.selectedText;
+                    else if (isToday) ctx.fillStyle = COLORS.todayText;
+                    else ctx.fillStyle = COLORS.text;
+                    ctx.fillText(dayCount, cx, cy);
+
+                    // Todo Dot
+                    if (state.todos[dateKey] && state.todos[dateKey].length > 0) {
+                        ctx.fillStyle = isSelected ? '#ffffff' : COLORS.dot;
+                        ctx.beginPath();
+                        ctx.arc(cx, cy + 20, 3, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+
+                    dayCount++;
+                }
+            }
+        }
+
+        // --- 5. Interaction ---
+        canvas.addEventListener('click', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            if (y < state.headerHeight) return;
+
+            const col = Math.floor(x / state.cellWidth);
+            const row = Math.floor((y - state.headerHeight) / state.cellHeight);
+            const year = state.currentDate.getFullYear();
+            const month = state.currentDate.getMonth();
+            const firstDay = getFirstDayOfMonth(year, month);
+            const clickedDayIndex = (row * 7) + col;
+            const dayNumber = clickedDayIndex - firstDay + 1;
+
+            if (dayNumber > 0 && dayNumber <= getDaysInMonth(year, month)) {
+                state.selectedDate = new Date(year, month, dayNumber);
+                drawCalendar();
+                renderTodoList();
+            }
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            state.mouseX = e.clientX - rect.left;
+            state.mouseY = e.clientY - rect.top;
+            drawCalendar();
+        });
+        
+        canvas.addEventListener('mouseleave', () => {
+            state.mouseX = -1; state.mouseY = -1;
+            drawCalendar();
+        });
+
+        document.getElementById('prevMonth').addEventListener('click', () => {
+            state.currentDate.setMonth(state.currentDate.getMonth() - 1);
+            drawCalendar();
+        });
+        document.getElementById('nextMonth').addEventListener('click', () => {
+            state.currentDate.setMonth(state.currentDate.getMonth() + 1);
+            drawCalendar();
+        });
+
+        // --- 6. Todo Logic & AI Integration ---
+
+        function renderTodoList() {
+            const listEl = document.getElementById('todoList');
+            const dateKey = formatDateKey(state.selectedDate);
+            const displayDate = `${state.selectedDate.getFullYear()}年 ${state.selectedDate.getMonth() + 1}月 ${state.selectedDate.getDate()}日`;
+            
+            document.getElementById('selectedDateDisplay').textContent = displayDate;
+            listEl.innerHTML = '';
+
+            const items = state.todos[dateKey] || [];
+
+            if (items.length === 0) {
+                listEl.innerHTML = '<div class="empty-state">今天没有待办事项<br>享受生活吧! ☕</div>';
+                return;
+            }
+
+            items.forEach((todo, index) => {
+                const itemEl = document.createElement('div');
+                itemEl.className = `todo-item ${todo.done ? 'completed' : ''}`;
+                
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.className = 'todo-checkbox';
+                checkbox.checked = todo.done;
+                checkbox.onclick = () => toggleTodo(dateKey, index);
+
+                const textSpan = document.createElement('span');
+                textSpan.className = 'todo-text';
+                textSpan.textContent = todo.text;
+
+                const delBtn = document.createElement('button');
+                delBtn.className = 'delete-btn';
+                delBtn.innerHTML = '×';
+                delBtn.title = "删除";
+                delBtn.onclick = () => deleteTodo(dateKey, index);
+
+                itemEl.appendChild(checkbox);
+                itemEl.appendChild(textSpan);
+                itemEl.appendChild(delBtn);
+                listEl.appendChild(itemEl);
+            });
+        }
+
+        function addTodo(textOverride) {
+            const input = document.getElementById('newTodoInput');
+            const text = textOverride || input.value.trim();
+            if (!text) return;
+
+            const dateKey = formatDateKey(state.selectedDate);
+            if (!state.todos[dateKey]) state.todos[dateKey] = [];
+
+            state.todos[dateKey].push({ text: text, done: false });
+            if (!textOverride) input.value = '';
+            
+            saveTodos();
+            renderTodoList();
+        }
+
+        function toggleTodo(dateKey, index) {
+            state.todos[dateKey][index].done = !state.todos[dateKey][index].done;
+            saveTodos();
+            renderTodoList();
+        }
+
+        function deleteTodo(dateKey, index) {
+            state.todos[dateKey].splice(index, 1);
+            if (state.todos[dateKey].length === 0) delete state.todos[dateKey];
+            saveTodos();
+            renderTodoList();
+        }
+
+        // --- AI Features ---
+        
+        // Feature 1: AI Generator
+        document.getElementById('aiGenBtn').addEventListener('click', async () => {
+            const input = document.getElementById('newTodoInput');
+            const goal = input.value.trim();
+            if (!goal) {
+                showModal("提示", "请输入一个目标，例如：'准备周末野餐'，然后点击生成。");
+                return;
+            }
+
+            const btn = document.getElementById('aiGenBtn');
+            const originalText = btn.innerText;
+            btn.innerText = "生成中...";
+            btn.disabled = true;
+
+            try {
+                const prompt = `Goal: "${goal}". Break this down into 3-5 concise, actionable todo items for a checklist. Return ONLY the items as plain text, one item per line. Language: Chinese.`;
+                const result = await callGemini(prompt);
+                
+                const tasks = result.split('\n').filter(line => line.trim() !== '');
+                tasks.forEach(task => {
+                    // Clean up markdown bullets if present
+                    const cleanTask = task.replace(/^[\*\-\d\.]+\s*/, '').trim();
+                    if (cleanTask) addTodo(cleanTask);
+                });
+                
+                input.value = ''; // Clear input
+            } catch (error) {
+                showModal("错误", "AI 生成失败，请稍后重试。\n" + error.message);
+            } finally {
+                btn.innerText = originalText;
+                btn.disabled = false;
+            }
+        });
+
+        // Feature 2: AI Daily Coach
+        document.getElementById('aiCoachBtn').addEventListener('click', async () => {
+            const dateKey = formatDateKey(state.selectedDate);
+            const items = state.todos[dateKey] || [];
+            
+            if (items.length === 0) {
+                showModal("AI 建议", "今天还没有任务哦，享受这轻松的一天吧！或者添加一些目标让我来帮你规划。");
+                return;
+            }
+
+            const btn = document.getElementById('aiCoachBtn');
+            const originalText = btn.innerText;
+            btn.innerText = "分析中...";
+            btn.disabled = true;
+
+            try {
+                const taskList = items.map(i => i.text + (i.done ? "(Completed)" : "")).join(", ");
+                const prompt = `Current tasks for today: [${taskList}]. Provide a short, motivating piece of advice (max 60 words) on how to prioritize or approach these tasks. Tone: Encouraging and productive. Language: Chinese.`;
+                
+                const advice = await callGemini(prompt);
+                showModal("🧠 AI 今日建议", advice);
+            } catch (error) {
+                showModal("错误", "获取建议失败。\n" + error.message);
+            } finally {
+                btn.innerText = originalText;
+                btn.disabled = false;
+            }
+        });
+
+        // Modal Helpers
+        const modal = document.getElementById('aiModal');
+        const modalBody = document.getElementById('modalBody');
+        const modalTitle = document.querySelector('.modal-title');
+
+        function showModal(title, text) {
+            modalTitle.innerText = title;
+            modalBody.innerText = text;
+            modal.classList.add('open');
+        }
+
+        window.closeModal = function() {
+            modal.classList.remove('open');
+        }
+
+        // Basic event listeners
+        document.getElementById('addTodoBtn').addEventListener('click', () => addTodo());
+        document.getElementById('newTodoInput').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') addTodo();
+        });
+
+        // Start
+        window.addEventListener('resize', resizeCanvas);
+        loadTodos();
+        resizeCanvas();
+        renderTodoList();
+
+    </script>
+</body>
+</html>
